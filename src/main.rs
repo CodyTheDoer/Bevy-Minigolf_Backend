@@ -69,7 +69,7 @@ fn send_game_state_update(mut socket: ResMut<MatchboxSocket<SingleChannel>>) {
     let peers: Vec<_> = socket.connected_peers().collect();
 
     for peer in peers {
-        let message = "GameState::InGame";
+        let message = "ConnectionState::Online";
         info!("Sending game_state update: {message:?} to {peer}");
         socket.send(message.as_bytes().into(), peer);
     }
