@@ -3,28 +3,114 @@
 //! Sends messages periodically to all connected clients.
 
 use bevy::{prelude::*, 
-    app::ScheduleRunnerPlugin, 
-    log::LogPlugin, 
     input::common_conditions::*,
-    input::InputPlugin,
-    // time::common_conditions::on_timer,
-    utils::Duration,
+    tasks::IoTaskPool,
 };
 
 use bevy_matchbox::{matchbox_signaling::SignalingServer, prelude::*};
+use dotenv::dotenv;
 use std::net::{Ipv4Addr, SocketAddrV4};
+use std::env;
+use sqlx::mysql::MySqlPoolOptions;
+use sqlx::MySqlPool;
+use tokio::runtime::Runtime;
+
+#[derive(Resource)]
+struct DatabasePool(MySqlPool);
+
+#[derive(Component)]
+struct DummyComponent;
 
 fn main() {
+    let runtime = Runtime::new().expect("Failed to create Tokio runtime");
+    
+    // Use the runtime to block on the async function and get the pool
+    let pool = runtime.block_on(establish_connection())
+        .expect("Failed to create database connection pool");
     App::new()
         // .add_plugins(DefaultPlugins)
         .add_plugins(DefaultPlugins)
         .insert_resource(RunTrigger::new())
+        .insert_resource(DatabasePool(pool))
         // .add_systems(Update, send_message.run_if(on_timer(Duration::from_secs(5))))
         .add_systems(Startup, (start_signaling_server, start_host_socket).chain())
+        .add_systems(Startup, startup_system)
         .add_systems(Update, temp_interface.run_if(input_just_released(KeyCode::ShiftLeft)))
         .add_systems(Update, receive_messages)
+        .add_systems(Update, query_system.run_if(input_just_released(KeyCode::Space)))
         .add_systems(Update, network_get_client_state_game.run_if(|run_trigger: Res<RunTrigger>|run_trigger.network_get_client_state_game()))
         .run();
+}
+
+// async fn perform_query(pool: MySqlPool) {
+//     // This is just an example of how you might query from the pool
+//     let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM player_table")
+//         .fetch_one(&pool)
+//         .await
+//         .expect("Failed to execute query");
+
+//     println!("Number of rows: {}", row.0);
+// }
+
+// fn query_system(pool: Res<DatabasePool>) {
+//     let pool = pool.0.clone();
+
+//     // Spawn a new task to handle the async query operation
+//     tokio::spawn(async move {
+//         perform_query(pool).await;
+//     });
+// }
+
+async fn perform_query(pool: MySqlPool) {
+    let row: (i64,) = match sqlx::query_as("SELECT COUNT(*) FROM player_table")
+        .fetch_one(&pool)
+        .await
+    {
+        Ok(row) => row,
+        Err(err) => {
+            eprintln!("Failed to execute query: {:?}", err);
+            return;
+        }
+    };
+
+    println!("Number of rows: {}", row.0);
+}
+
+fn query_system(pool: Res<DatabasePool>) {
+    let pool = pool.0.clone();
+    
+    // Use Bevy's IoTaskPool to run the async function in the background
+    let task_pool = IoTaskPool::get();
+
+    task_pool.spawn(async move {
+        // Create a new Tokio runtime
+        let runtime = Runtime::new().expect("Failed to create Tokio runtime");
+        
+        // Run the query within the runtime's context
+        runtime.block_on(async move {
+            perform_query(pool).await;
+        });
+    })
+    .detach();
+}
+
+fn startup_system(pool: Res<DatabasePool>) {
+    println!("Database pool has been set up successfully");
+}
+
+async fn establish_connection() -> sqlx::Result<sqlx::Pool<sqlx::MySql>> {
+    dotenv().ok();
+
+    let database_url = env::var("DATABASE_URL")
+        .expect("DATABASE_URL must be set in .env file");
+
+    // Create a connection pool
+    let pool = MySqlPoolOptions::new()
+        .max_connections(5) // Set the number of maximum connections in the pool
+        .connect(&database_url)
+        .await?;
+
+    Ok(pool)
 }
 
 fn start_signaling_server(mut commands: Commands) {
@@ -79,7 +165,6 @@ fn receive_messages(mut socket: ResMut<MatchboxSocket<SingleChannel>>) {
     
     if update_received == true {
         send_game_state_update(socket);
-        update_received = false;
     }
 }
 

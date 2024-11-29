@@ -6,3 +6,6 @@ edition = "2021"
 [dependencies]
 bevy = "0.14.2"
 bevy_matchbox = { version = "0.10", features = ["signaling"] }
+dotenv = "0.15.0"
+sqlx = { version = "0.8.0", features = [ "runtime-tokio", "mysql" ] }
+tokio = { version = "1.0", features = ["full"] } 
