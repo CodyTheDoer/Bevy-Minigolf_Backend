@@ -40,19 +40,18 @@ pub async fn first_time_boot_setup_map_set_async(
     // Count how many players exist in the player_table
     let res: (i64,) = match sqlx::query_as("SELECT COUNT(*) FROM map_set_table")
         .fetch_one(&pool)
-        .await
-    {
-        Ok(res) => res, 
-        Err(err) => {
-            eprintln!("Failed to execute query: {:?}", err);
-            // Run a callback on the main thread to handle the error properly
-            ctx.run_on_main_thread(move |_ctx| {
-                info!("Failed to execute query in the task: {:?}", err);
-            })
-            .await;
-            return;
-        }
-    };
+        .await{
+            Ok(res) => res, 
+            Err(err) => {
+                eprintln!("Failed to execute query: {:?}", err);
+                // Run a callback on the main thread to handle the error properly
+                ctx.run_on_main_thread(move |_ctx| {
+                    info!("Failed to execute query in the task: {:?}", err);
+                })
+                .await;
+                return;
+            }
+        };
 
     println!("Number of res: {}", res.0);
     if res.0 == 0 {

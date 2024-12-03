@@ -7,7 +7,10 @@ use uuid::Uuid;
 use rmp_serde::encode;
 
 use crate::{
-    MapSets, PlayerIdStorage, RunTrigger
+    MapSets, 
+    PlayerInfo,
+    PlayerInfoStorage, 
+    RunTrigger,
 };
 
 pub fn start_signaling_server(mut commands: Commands) {
@@ -52,13 +55,14 @@ pub fn send_game_state_update(
 pub fn receive_client_requests(
     mut socket: ResMut<MatchboxSocket<SingleChannel>>,
     mut map_sets: ResMut<MapSets>,
-    mut player_id_storage: ResMut<PlayerIdStorage>,
+    mut player_info_storage: ResMut<PlayerInfoStorage>,
+    mut run_trigger: ResMut<RunTrigger>,
 ) {
     for (peer, state) in socket.update_peers() {
         info!("{peer}: {state:?}");
     }
 
-    let mut send_same_state_update_bool = false;
+    let mut send_game_state_update_bool = false;
 
     for (_id, message) in socket.receive() {
         match std::str::from_utf8(&message) {
@@ -84,10 +88,12 @@ pub fn receive_client_requests(
                                 let username = parts[1].trim();
                                 let email = parts[2].trim();
                                 
-                                info!("Init ClientProtocol::InitPlayerConnection: ({:?}, {:?}, {:?},)\n\n", player_id, username, email);
-
-                                player_id_storage.add(player_id);
-                                send_same_state_update_bool = true;
+                                info!("Init ClientProtocol::InitPlayerConnection: ({:?}, {:?}, {:?},)", player_id, username, email);
+                                
+                                let player = PlayerInfo::from_vec_str(parts);
+                                player_info_storage.add(player);
+                                run_trigger.set_target("db_pipeline_player_init", true);
+                                send_game_state_update_bool = true;
                             };
                         },
                         "REQUEST_FULL_MAP_SETS" => {
@@ -109,9 +115,10 @@ pub fn receive_client_requests(
         }
     }
 
-    if send_same_state_update_bool == true {
-        let player: String = player_id_storage.get_last_str_and_pop();
-        send_game_state_update(player, socket);
+    if send_game_state_update_bool == true {
+        if let Some(player) = player_info_storage.get_last_player_id_string() {
+            send_game_state_update(player, socket);
+        };
     }
 }
 

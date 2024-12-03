@@ -7,6 +7,8 @@ use uuid::Uuid;
 
 pub mod handlers;
 
+use std::sync::Arc;
+use std::sync::Mutex;
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum ClientProtocol{
@@ -16,39 +18,21 @@ pub enum ClientProtocol{
 #[derive(Resource)]
 pub struct DatabasePool(pub MySqlPool);
 
-#[derive(Clone, Resource)]
-pub struct PlayerIdStorage {
-    player_ids: Vec<String>,
+#[derive(Clone, Debug, Resource)]
+pub struct PlayerInfo {
+    player_id: String,
+    player_email: String,
+    player_username: String,
 }
 
-impl PlayerIdStorage {
-    pub fn new() -> Self {
-        let player_ids: Vec<String> = Vec::new();
-        PlayerIdStorage {
-            player_ids,
-        }
-    }
-
-    pub fn add(&mut self, id: &str) {
-        self.player_ids.push(String::from(id));
-    }
-
-    pub fn get_last_str(&self) -> String {
-        let count = self.player_ids.clone().len();
-        let last = &self.player_ids[count];
-        last.to_owned()
-    }
-
-    pub fn get_last_str_and_pop(&mut self) -> String {
-        let count = self.player_ids.clone().len() - 1;
-        let last = &self.player_ids.clone()[count];
-        self.player_ids.pop();
-        last.to_owned()
-    }
+#[derive(Clone, Debug, Resource)]
+pub struct PlayerInfoStorage {
+    pub players: Arc<Mutex<Vec<Arc<Mutex<PlayerInfo>>>>>,
 }
 
 #[derive(Debug, Resource)]
 pub struct RunTrigger{
+    db_pipeline_player_init: bool,
     network_get_client_state_game: bool,
 }
 
