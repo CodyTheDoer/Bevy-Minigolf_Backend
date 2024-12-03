@@ -10,9 +10,18 @@ pub mod handlers;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(States, Clone, PartialEq, Eq, Hash, Debug, Default)]
 pub enum ClientProtocol{
+    #[default]
+    Idle,
     InitPlayerConnection,
+    SyncExistingPlayerId,
+}
+
+#[derive(Event)]
+pub struct SyncPlayerIdEvent {
+    pub player_id_host: String,
+    pub player_id_client: String,
 }
 
 #[derive(Resource)]

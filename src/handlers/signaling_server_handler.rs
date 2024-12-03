@@ -7,6 +7,7 @@ use uuid::Uuid;
 use rmp_serde::encode;
 
 use crate::{
+    ClientProtocol,
     MapSets, 
     PlayerInfo,
     PlayerInfoStorage, 
@@ -39,14 +40,18 @@ pub fn start_host_socket(mut commands: Commands) {
     commands.insert_resource(socket);
 }
 
-pub fn send_game_state_update(
+pub fn send_client_state_update(
     player_id: String,
     mut socket: ResMut<MatchboxSocket<SingleChannel>>,
+    client_protocol: Res<State<ClientProtocol>>,
 ) {
     let peers: Vec<_> = socket.connected_peers().collect();
 
     for peer in peers {
-        let message = format!("({}, StateGameConnection::Online)", player_id);
+        let message = format!("({}, {:?})", 
+            player_id,
+            client_protocol.get(),
+        );
         info!("Sending game_state update: {message:?} to {peer}");
         socket.send(message.as_bytes().into(), peer);
     }
@@ -57,12 +62,14 @@ pub fn receive_client_requests(
     mut map_sets: ResMut<MapSets>,
     mut player_info_storage: ResMut<PlayerInfoStorage>,
     mut run_trigger: ResMut<RunTrigger>,
+    client_protocol: Res<State<ClientProtocol>>, 
+    mut set_client_protocol: ResMut<NextState<ClientProtocol>>,
 ) {
     for (peer, state) in socket.update_peers() {
         info!("{peer}: {state:?}");
     }
 
-    let mut send_game_state_update_bool = false;
+    let mut send_client_state_update_bool = false;
 
     for (_id, message) in socket.receive() {
         match std::str::from_utf8(&message) {
@@ -93,7 +100,7 @@ pub fn receive_client_requests(
                                 let player = PlayerInfo::from_vec_str(parts);
                                 player_info_storage.add(player);
                                 run_trigger.set_target("db_pipeline_player_init", true);
-                                send_game_state_update_bool = true;
+                                send_client_state_update_bool = true;
                             };
                         },
                         "REQUEST_FULL_MAP_SETS" => {
@@ -115,9 +122,11 @@ pub fn receive_client_requests(
         }
     }
 
-    if send_game_state_update_bool == true {
+    if send_client_state_update_bool == true {
         if let Some(player) = player_info_storage.get_last_player_id_string() {
-            send_game_state_update(player, socket);
+            set_client_protocol.set(ClientProtocol::InitPlayerConnection);
+            send_client_state_update(player, socket, client_protocol);
+            // set_client_protocol.set(ClientProtocol::Idle);
         };
     }
 }

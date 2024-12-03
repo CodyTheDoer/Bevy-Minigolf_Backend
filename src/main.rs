@@ -12,10 +12,12 @@ use sqlx::mysql::MySqlPoolOptions;
 use tokio::runtime::Runtime;
 
 use minigolf_backend_server::{
+    ClientProtocol,
     DatabasePool,
-    RunTrigger,
     MapSets,
     PlayerInfoStorage,
+    RunTrigger,
+    SyncPlayerIdEvent,
 };
 
 use minigolf_backend_server::handlers::database_handler::{
@@ -60,19 +62,46 @@ fn main() {
         // .add_plugins(DefaultPlugins)
         .add_plugins(DefaultPlugins)
         .add_plugins(bevy_tokio_tasks::TokioTasksPlugin::default())
+        
+        .insert_state(ClientProtocol::Idle)
+        
+        .add_event::<SyncPlayerIdEvent>() // Register the event
+
         .insert_resource(DatabasePool(pool))
         .insert_resource(MapSets::new())
         .insert_resource(PlayerInfoStorage::new())
         .insert_resource(RunTrigger::new())
+        
         // .add_systems(Update, send_message.run_if(on_timer(Duration::from_secs(5))))
         .add_systems(Startup, (start_signaling_server, start_host_socket).chain())
         .add_systems(Update, temp_interface.run_if(input_just_released(KeyCode::ShiftLeft)))
         .add_systems(Update, receive_client_requests)
+        .add_systems(Update, sync_player_id_system)
         .add_systems(Update, first_time_boot_setup_map_set.run_if(input_just_released(KeyCode::Space)))
         .add_systems(Update, client_sync_protocol_send_existing_map_sets.run_if(input_just_released(KeyCode::KeyZ)))
         .add_systems(Update, db_pipeline_player_init.run_if(|run_trigger: Res<RunTrigger>|run_trigger.db_pipeline_player_init()))
         .add_systems(Update, network_get_client_state_game.run_if(|run_trigger: Res<RunTrigger>|run_trigger.network_get_client_state_game()))
+        
+        // .add_systems(OnEnter(ClientProtocol::SyncExistingPlayerId), sync_player_id_system)
+        
         .run();
+}
+
+pub fn sync_player_id_system(
+    mut event_reader: EventReader<SyncPlayerIdEvent>,
+    mut socket: ResMut<MatchboxSocket<SingleChannel>>,
+) {
+    for event in event_reader.read() {
+        let peers: Vec<_> = socket.connected_peers().collect();
+        for peer in peers {
+            let message = format!("({}, SyncExistingPlayerId({:?}))", event.player_id_client.clone(), event.player_id_host.clone());
+            info!("Sending sync_player_id_system update: {message:?} to {peer}");
+            socket.send(message.as_bytes().into(), peer);
+        }
+
+        // Set back to Idle state
+        // set_client_protocol.set(ClientProtocol::Idle);
+    }
 }
 
 fn temp_interface(

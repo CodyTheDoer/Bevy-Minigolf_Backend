@@ -1,14 +1,17 @@
 use bevy::prelude::*;
 
+use bevy_matchbox::prelude::*;
 use bevy_tokio_tasks::{TaskContext, TokioTasksRuntime};
 use sqlx::{MySqlPool, Error};
 use uuid::Uuid;
 
 use crate::{
+    ClientProtocol,
     DatabasePool,
-    RunTrigger,
     PlayerInfo,
     PlayerInfoStorage,
+    RunTrigger,
+    SyncPlayerIdEvent,
 };
 
 pub fn db_pipeline_player_init(
@@ -37,52 +40,83 @@ pub async fn db_pipeline_player_init_async(
     info!("Init: db_query_player_create_if_null_async");
     info!("Player: {:?}", player);
 
-    // Fetch player IDs
-    let player_ids = match fetch_player_ids(&pool, &mut ctx).await {
-        Ok(ids) => ids,
-        Err(_) => return, // If error handling already performed in helper function, just return here
+    // Step 1: Fetch player IDs and emails from the database
+    let player_ids_emails = match fetch_player_ids_and_emails(&pool, &mut ctx).await {
+        Ok(data) => data,
+        Err(_) => return, // Error handling already done in helper function
     };
 
-    // Fetch player emails
-    let player_emails = match fetch_player_emails(&pool, &mut ctx).await {
-        Ok(emails) => emails,
-        Err(_) => return, // If error handling already performed in helper function, just return here
-    };
-
-    // Check if the player already exists by ID or email
+    // Step 2: Extract player information
     let player_id = player.get_id().to_string();
     let player_email = player.get_email();
 
-    let id_match = player_ids.iter().any(|(id,)| {
+    // Step 3: Check if player ID exists in the fetched list
+    let id_match = player_ids_emails.iter().any(|(id, _)| {
         if let Some(ref id_value) = id {
             id_value.to_string() == player_id
         } else {
             false
         }
     });
-    
-    if !id_match {
-        let mut email_match_needs_id = false;
-        
-        if let Some(_) = player_emails.iter().find(|(email,)| email == &player_email) {
-            email_match_needs_id = true;
-        }
 
-        if email_match_needs_id {
-            if let Err(e) = update_player_id(&pool, &player, &player_email).await {
-                eprintln!("Error updating player ID: {}", e);
+    if id_match {
+        // Player with this ID already exists in the database
+        info!("Player exists");
+        return;
+    }
+
+    // Step 4: Check if player email exists and handle accordingly
+    let email_match = player_ids_emails.iter().find(|(_, email)| email == &player_email);
+
+    match email_match {
+        Some((db_player_id, _)) => {
+            // Player email exists, so we need to sync the ID with the client
+
+            if let Some(db_player_id) = db_player_id.clone() {
+                // Send the correct ID (from the database) to the client
+                ctx.run_on_main_thread(move |ctx| { 
+                    let mut event_writer = ctx.world.get_resource_mut::<Events<SyncPlayerIdEvent>>();
+                    if let Some(mut writer) = event_writer {
+                        writer.send(SyncPlayerIdEvent {
+                            player_id_host: db_player_id.to_string(), // Use the ID from the database
+                            player_id_client: player_id,
+                        });
+                    }
+                })
+                .await;
             } else {
-                println!("Player ID synced with db: {:?}", player_id);
+                eprintln!("Error: Player ID is empty for the matched email: {:?}", player_email);
             }
-            return; // No need to insert a new player since email was found
-        } else {
+        },
+        None => {
+            // Step 5: If no ID or email match found, insert a new player
             if let Err(err) = insert_new_player(&pool, &player, &mut ctx).await {
                 eprintln!("Failed to insert new player {:?}", err);
-                eprintln!("player_id: {:?}", player.get_id());   
+                eprintln!("player_id: {:?}", player.get_id());
             }
         }
-    } else {
-        info!("Player exists");
+    }
+}
+
+async fn fetch_player_ids_and_emails(
+    pool: &MySqlPool,
+    ctx: &mut TaskContext,
+) -> Result<Vec<(Option<Uuid>, String)>, Error> {
+    // Define the query to fetch both player_id and email from the player_table
+    match sqlx::query_as::<_, (Option<Uuid>, String)>("SELECT player_id, email FROM player_table")
+        .fetch_all(pool)
+        .await
+    {
+        Ok(player_data) => Ok(player_data),
+        Err(err) => {
+            let err_for_ctx = err.to_string(); // Convert error to string or clone it before moving it
+            eprintln!("Failed to execute query: {:?}", err_for_ctx);
+            ctx.run_on_main_thread(move |_ctx| {
+                info!("Failed to execute query in the task: {:?}", err_for_ctx);
+            })
+            .await;
+            Err(err)
+        }
     }
 }
 
