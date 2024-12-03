@@ -2,8 +2,13 @@ use bevy::prelude::*;
 
 use bevy_matchbox::{matchbox_signaling::SignalingServer, prelude::*};
 use std::net::{Ipv4Addr, SocketAddrV4};
+use uuid::Uuid;
 
-use crate::RunTrigger;
+use rmp_serde::encode;
+
+use crate::{
+    MapSets, PlayerIdStorage, RunTrigger
+};
 
 pub fn start_signaling_server(mut commands: Commands) {
     info!("Starting signaling server");
@@ -31,35 +36,82 @@ pub fn start_host_socket(mut commands: Commands) {
     commands.insert_resource(socket);
 }
 
-pub fn send_game_state_update(mut socket: ResMut<MatchboxSocket<SingleChannel>>) {
+pub fn send_game_state_update(
+    player_id: String,
+    mut socket: ResMut<MatchboxSocket<SingleChannel>>,
+) {
     let peers: Vec<_> = socket.connected_peers().collect();
 
     for peer in peers {
-        let message = "StateGameConnection::Online";
+        let message = format!("({}, StateGameConnection::Online)", player_id);
         info!("Sending game_state update: {message:?} to {peer}");
         socket.send(message.as_bytes().into(), peer);
     }
 }
 
-pub fn receive_messages(mut socket: ResMut<MatchboxSocket<SingleChannel>>) {
+pub fn receive_client_requests(
+    mut socket: ResMut<MatchboxSocket<SingleChannel>>,
+    mut map_sets: ResMut<MapSets>,
+    mut player_id_storage: ResMut<PlayerIdStorage>,
+) {
     for (peer, state) in socket.update_peers() {
         info!("{peer}: {state:?}");
     }
 
-    let mut update_received = false;
+    let mut send_same_state_update_bool = false;
+
     for (_id, message) in socket.receive() {
         match std::str::from_utf8(&message) {
             Ok(message) => {
-                info!("Received message: {message:?}");
+                info!("Received message: {:?}", message.clone());
+                        
+                // Trim surrounding parentheses and split by the comma
+                let trimmed_message: &str = message.trim_start_matches('(').trim_end_matches(')');
+                let parts: Vec<&str> = trimmed_message.splitn(2, ", ").collect();
+        
+                // Ensure that the split resulted in the expected two parts (protocol and payload)
+                if parts.len() == 2 {
+                    let protocol = parts[0].trim();
+                    let payload = parts[1].trim();
 
-            },
+                    match protocol {
+                        "ClientProtocol::InitPlayerConnection" => {    
+                            let trimmed_message = payload.trim_start_matches('(').trim_end_matches(')');
+                            let parts: Vec<&str> = trimmed_message.splitn(3, ", ").collect();
+                        
+                            if parts.len() == 3 {
+                                let player_id = parts[0].trim();
+                                let username = parts[1].trim();
+                                let email = parts[2].trim();
+                                
+                                info!("Init ClientProtocol::InitPlayerConnection: ({:?}, {:?}, {:?},)\n\n", player_id, username, email);
+
+                                player_id_storage.add(player_id);
+                                send_same_state_update_bool = true;
+                            };
+                        },
+                        "REQUEST_FULL_MAP_SETS" => {
+                            match encode::to_vec(&*map_sets) {
+                                Ok(serialized_map_sets) => {
+                                    socket.send(serialized_map_sets.into(), _id);
+                                    info!("Sent full map sets to peer: {:?}", _id);
+                                }
+                                Err(ser_err) => {
+                                    error!("Failed to serialize map sets for sending: {:?}", ser_err);
+                                }
+                            }
+                        },
+                        _ => {},
+                    }    
+                };
+            }
             Err(e) => error!("Failed to convert message to string: {e}"),
         }
-        update_received = true;
     }
-    
-    if update_received == true {
-        send_game_state_update(socket);
+
+    if send_same_state_update_bool == true {
+        let player: String = player_id_storage.get_last_str_and_pop();
+        send_game_state_update(player, socket);
     }
 }
 

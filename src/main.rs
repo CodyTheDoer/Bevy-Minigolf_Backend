@@ -13,12 +13,17 @@ use tokio::runtime::Runtime;
 use minigolf_backend_server::{
     DatabasePool,
     RunTrigger,
+    MapSets,
+    PlayerIdStorage,
 };
 
-use minigolf_backend_server::handlers::map_set_handler::first_time_boot_setup_map_set;
+use minigolf_backend_server::handlers::map_set_handler::{
+    client_sync_protocol_send_existing_map_sets,
+    first_time_boot_setup_map_set,
+};
 use minigolf_backend_server::handlers::signaling_server_handler::{
     network_get_client_state_game,
-    receive_messages,
+    receive_client_requests,
     start_host_socket,
     start_signaling_server,
 };
@@ -48,13 +53,16 @@ fn main() {
         // .add_plugins(DefaultPlugins)
         .add_plugins(DefaultPlugins)
         .add_plugins(bevy_tokio_tasks::TokioTasksPlugin::default())
-        .insert_resource(RunTrigger::new())
         .insert_resource(DatabasePool(pool))
+        .insert_resource(MapSets::new())
+        .insert_resource(PlayerIdStorage::new())
+        .insert_resource(RunTrigger::new())
         // .add_systems(Update, send_message.run_if(on_timer(Duration::from_secs(5))))
         .add_systems(Startup, (start_signaling_server, start_host_socket).chain())
         .add_systems(Update, temp_interface.run_if(input_just_released(KeyCode::ShiftLeft)))
-        .add_systems(Update, receive_messages)
+        .add_systems(Update, receive_client_requests)
         .add_systems(Update, first_time_boot_setup_map_set.run_if(input_just_released(KeyCode::Space)))
+        .add_systems(Update, client_sync_protocol_send_existing_map_sets.run_if(input_just_released(KeyCode::KeyZ)))
         .add_systems(Update, network_get_client_state_game.run_if(|run_trigger: Res<RunTrigger>|run_trigger.network_get_client_state_game()))
         .run();
 }
