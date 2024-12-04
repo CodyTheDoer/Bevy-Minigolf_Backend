@@ -4,10 +4,48 @@ use crate::RunTrigger;
 
 impl RunTrigger {
     pub fn new() -> Self {
+        let triggers = vec![
+            String::from("party_handler_active_player_add_bonk"),
+            String::from("party_handler_active_player_set_ball_location"),
+            String::from("party_handler_active_player_set_hole_completion_state_true"),
+            String::from("party_handler_cycle_active_player"),
+            String::from("party_handler_new_player_ai"),
+            String::from("party_handler_new_player_local"),
+            String::from("party_handler_new_player_remote"),
+            String::from("party_handler_remove_ai"),
+            String::from("party_handler_remove_last_player"),
+            String::from("network_get_client_state_all"),
+            String::from("network_get_client_state_game"),
+            String::from("game_handler_cycle_state_camera"),
+            String::from("game_handler_cycle_state_map_set"),
+            String::from("game_handler_cycle_current_level"),
+            String::from("game_handler_get_active_ball_location"),
+            String::from("game_handler_reset_active_ball_location"),
+            String::from("game_handler_set_active_ball_location"),
+            String::from("game_handler_state_turn_next_player_turn"),
+            String::from("game_handler_start_game_local"),
+            String::from("game_handler_toggle_state_game"),
+            String::from("leader_board_log_game"),
+            String::from("leader_board_review_last_game"),
+        ];
         Self{
+            trigger_idx: 0,
+            triggers,
             db_pipeline_player_init: false,
             network_get_client_state_game: false,
         }
+    }
+
+    pub fn get_triggers_ref(&self) -> &Vec<String> {
+        &self.triggers
+    }
+
+    pub fn get_trigger_idx(&self) -> usize {
+        self.trigger_idx as usize
+    }
+
+    pub fn set_trigger_idx(&mut self, idx: usize) {
+        self.trigger_idx = idx as i32;
     }
 
     pub fn get(&self, target: &str) -> bool {

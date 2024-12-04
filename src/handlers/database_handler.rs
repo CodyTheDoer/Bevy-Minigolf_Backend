@@ -209,3 +209,17 @@ async fn insert_new_player(
         }
     }
 }
+
+pub fn sync_player_id_init_system(
+    mut event_reader: EventReader<SyncPlayerIdEvent>,
+    mut socket: ResMut<MatchboxSocket<SingleChannel>>,
+) {
+    for event in event_reader.read() {
+        let peers: Vec<_> = socket.connected_peers().collect();
+        for peer in peers {
+            let message = format!("({}, SyncExistingPlayerId({:?}))", event.player_id_client.clone(), event.player_id_host.clone());
+            info!("Sending sync_player_id_init_system update: {message:?} to {peer}");
+            socket.send(message.as_bytes().into(), peer);
+        }
+    }
+}

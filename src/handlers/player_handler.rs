@@ -1,12 +1,76 @@
 use bevy::prelude::*;
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use std::time::{Instant, Duration};
+use uuid::Uuid;
+
 use crate::{
+    ConnectedPlayers,
     PlayerInfo,
     PlayerInfoStorage,
+    PlayerHeartBeatStatus,
 };
+
+impl ConnectedPlayers {
+    pub fn new() -> Self {
+        Self {
+            players: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    // Add a new player to the connected players list
+    pub fn add_player(&self, player_id: Uuid) {
+        let mut players = self.players.lock().unwrap();
+        players.insert(player_id, PlayerHeartBeatStatus {
+            last_heartbeat: Instant::now(),
+        });
+    }
+
+    // Add a new player to the connected players list
+    pub fn add_player_string(&self, player_id: String) {
+        match Uuid::parse_str(&player_id) {
+            Ok(uuid) => {
+                let mut players = self.players.lock().unwrap();
+                players.insert(uuid, PlayerHeartBeatStatus {
+                    last_heartbeat: Instant::now(),
+                });
+                println!("Player {} added.", uuid);
+            }
+            Err(e) => {
+                // Handle the error case where the UUID string is invalid
+                println!("Failed to parse UUID from player_id: {}. Error: {}", player_id, e);
+            }
+        }
+    }
+
+    // Remove a player from the connected players list
+    pub fn remove_player(&self, player_id: &Uuid) {
+        let mut players = self.players.lock().unwrap();
+        players.remove(player_id);
+    }
+
+    // Update the heartbeat timestamp for a player
+    pub fn update_heartbeat(&self, player_id: &Uuid) {
+        let mut players = self.players.lock().unwrap();
+        if let Some(player_info) = players.get_mut(player_id) {
+            player_info.last_heartbeat = Instant::now();
+        }
+    }
+
+    // Check for players that have timed out and return their UUIDs
+    pub fn check_timeouts(&self, timeout_duration: Duration) -> Vec<Uuid> {
+        let players = self.players.lock().unwrap();
+        let now = Instant::now();
+        players
+            .iter()
+            .filter(|(_, player_info)| now.duration_since(player_info.last_heartbeat) > timeout_duration)
+            .map(|(player_id, _)| *player_id)
+            .collect()
+    }
+}
 
 impl PlayerInfo {
     pub fn new(player_id: String, player_email: String, player_username: String) -> Self {

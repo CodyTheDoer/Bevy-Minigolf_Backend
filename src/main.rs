@@ -4,24 +4,38 @@ use bevy::{prelude::*,
     input::common_conditions::*,
 };
 
-use bevy_tokio_tasks::{TaskContext, TokioTasksRuntime};
 use bevy_matchbox::prelude::*;
 use dotenv::dotenv;
-use std::env;
+use std::{
+        time::Duration,
+        env,
+};
 use sqlx::mysql::MySqlPoolOptions;
 use tokio::runtime::Runtime;
 
 use minigolf_backend_server::{
     ClientProtocol,
+    ConnectedPlayers,
     DatabasePool,
+    Fonts,
+    HeartBeatMonitorTimer,
     MapSets,
     PlayerInfoStorage,
     RunTrigger,
     SyncPlayerIdEvent,
+    SyncTriggerIndexEvent,
+    UiUpdateTimer,
+};
+
+use minigolf_backend_server::user_interface::{
+    interface,
+    setup_ui,
+    ui_update_system,
 };
 
 use minigolf_backend_server::handlers::database_handler::{
     db_pipeline_player_init,
+    sync_player_id_init_system,
 };
 
 
@@ -31,6 +45,7 @@ use minigolf_backend_server::handlers::map_set_handler::{
 };
 
 use minigolf_backend_server::handlers::signaling_server_handler::{
+    heartbeat_monitor_system,
     network_get_client_state_game,
     receive_client_requests,
     start_host_socket,
@@ -65,110 +80,51 @@ fn main() {
         
         .insert_state(ClientProtocol::Idle)
         
-        .add_event::<SyncPlayerIdEvent>() // Register the event
+        .add_event::<SyncPlayerIdEvent>() 
+        .add_event::<SyncTriggerIndexEvent>() 
 
+        .insert_resource(ConnectedPlayers::new())
         .insert_resource(DatabasePool(pool))
+        .insert_resource(Fonts::new())
         .insert_resource(MapSets::new())
         .insert_resource(PlayerInfoStorage::new())
         .insert_resource(RunTrigger::new())
+
+        .insert_resource(UiUpdateTimer(Timer::new(Duration::from_secs(1), TimerMode::Repeating)))
+        .insert_resource(HeartBeatMonitorTimer(Timer::new(Duration::from_secs(5), TimerMode::Repeating)))
         
         // .add_systems(Update, send_message.run_if(on_timer(Duration::from_secs(5))))
         .add_systems(Startup, (start_signaling_server, start_host_socket).chain())
-        .add_systems(Update, temp_interface.run_if(input_just_released(KeyCode::ShiftLeft)))
+        .add_systems(Startup, setup_ui)
+
+        .add_systems(Update, interface.run_if(input_just_released(KeyCode::ShiftLeft)))
+        .add_systems(Update, sync_player_id_init_system)
         .add_systems(Update, receive_client_requests)
-        .add_systems(Update, sync_player_id_system)
+        .add_systems(Update, heartbeat_monitor_system)
+        .add_systems(Update, client_run_trigger)
         .add_systems(Update, first_time_boot_setup_map_set.run_if(input_just_released(KeyCode::Space)))
         .add_systems(Update, client_sync_protocol_send_existing_map_sets.run_if(input_just_released(KeyCode::KeyZ)))
         .add_systems(Update, db_pipeline_player_init.run_if(|run_trigger: Res<RunTrigger>|run_trigger.db_pipeline_player_init()))
         .add_systems(Update, network_get_client_state_game.run_if(|run_trigger: Res<RunTrigger>|run_trigger.network_get_client_state_game()))
-        
-        // .add_systems(OnEnter(ClientProtocol::SyncExistingPlayerId), sync_player_id_system)
-        
+        .add_systems(Update, ui_update_system)                
+
         .run();
 }
 
-pub fn sync_player_id_system(
-    mut event_reader: EventReader<SyncPlayerIdEvent>,
+pub fn client_run_trigger(
+    trigger: ResMut<RunTrigger>,
+    mut event_reader: EventReader<SyncTriggerIndexEvent>,
     mut socket: ResMut<MatchboxSocket<SingleChannel>>,
 ) {
     for event in event_reader.read() {
+        let target_idx =  trigger.get_trigger_idx();
+        let triggers = trigger.get_triggers_ref();
+        let trigger = triggers[target_idx].as_str();
         let peers: Vec<_> = socket.connected_peers().collect();
         for peer in peers {
-            let message = format!("({}, SyncExistingPlayerId({:?}))", event.player_id_client.clone(), event.player_id_host.clone());
-            info!("Sending sync_player_id_system update: {message:?} to {peer}");
+            let message = format!("({}, RunTrigger({}))", event.player_id.clone(), trigger);
+            info!("Sending sync_player_id_init_system update: {message:?} to {peer}");
             socket.send(message.as_bytes().into(), peer);
         }
-
-        // Set back to Idle state
-        // set_client_protocol.set(ClientProtocol::Idle);
     }
-}
-
-fn temp_interface(
-    keys: Res<ButtonInput<KeyCode>>,
-    mut socket: ResMut<MatchboxSocket<SingleChannel>>,
-    mut run_trigger: ResMut<RunTrigger>,
-) {
-    if keys.pressed(KeyCode::KeyG) {
-        info!("pressed: KeyG");  
-        run_trigger.set_target("network_get_client_state_game", true);
-    };
-    let mut trigger = "";
-    if keys.pressed(KeyCode::Space) {
-        info!("pressed: Space");  
-        trigger = "game_handler_toggle_state_game";
-    };
-    if keys.pressed(KeyCode::KeyB) {
-        info!("pressed: KeyB");  
-        trigger = "party_handler_active_player_add_bonk";
-    };
-    if keys.pressed(KeyCode::KeyA) { // should trigger with new turn
-        info!("pressed: KeyA");  
-        trigger = "party_handler_active_player_set_hole_completion_state_true";
-    };
-    if keys.pressed(KeyCode::KeyC) {
-        info!("pressed: KeyC");  
-        trigger = "game_handler_cycle_state_camera";
-    };
-    if keys.pressed(KeyCode::KeyM) {
-        info!("pressed: KeyM");  
-        trigger = "game_handler_cycle_state_map_set";
-    };
-    if keys.pressed(KeyCode::KeyN) {
-        info!("pressed: KeyN");  
-        trigger = "game_handler_state_turn_next_player_turn";
-    };
-    if keys.pressed(KeyCode::KeyP) {
-        info!("pressed: KeyP");  
-        trigger = "party_handler_cycle_active_player";
-    };
-    if keys.pressed(KeyCode::KeyS) {
-        info!("pressed: KeyS");  
-        trigger = "game_handler_start_game_local";
-    };
-    if keys.pressed(KeyCode::Numpad1) {
-        info!("pressed: Numpad1");  
-        trigger = "party_handler_remove_last_player";
-    };
-    if keys.pressed(KeyCode::Numpad3) {
-        info!("pressed: Numpad3");  
-        trigger = "party_handler_remove_ai";
-    };
-    if keys.pressed(KeyCode::Numpad7) {
-        info!("pressed: Numpad7");  
-        trigger = "party_handler_new_player_local";
-    };
-    if keys.pressed(KeyCode::Numpad8) {
-        info!("pressed: Numpad8");  
-        trigger = "party_handler_new_player_remote";
-    };
-    if keys.pressed(KeyCode::Numpad9) {
-        info!("pressed: Numpad9");   
-        trigger = "party_handler_new_player_ai";
-    };
-    let peers: Vec<_> = socket.connected_peers().collect();
-    for peer in peers {
-        info!("Sending message: {trigger:?} to {peer}");
-        socket.send(trigger.as_bytes().into(), peer);
-    };
 }

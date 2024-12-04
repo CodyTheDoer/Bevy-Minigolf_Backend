@@ -2,13 +2,33 @@ use bevy::prelude::*;
 use sqlx::MySqlPool;
 use sqlx::FromRow;  
 use serde::{Serialize, Deserialize};
+use std::collections::HashMap;
+use std::time::Instant;
 use time::OffsetDateTime;
 use uuid::Uuid;
 
 pub mod handlers;
+pub mod user_interface;
 
 use std::sync::Arc;
 use std::sync::Mutex;
+
+#[derive(Resource)]
+pub struct Fonts {
+    pub fonts: Vec<TextStyle>,
+}
+
+impl Fonts {
+    pub fn new() -> Self {
+        let fonts: Vec<TextStyle> = Vec::new();
+        Fonts {
+            fonts,
+        }
+    }
+}
+
+#[derive(Asset, Component, TypePath)]
+pub struct CameraUi;
 
 #[derive(States, Clone, PartialEq, Eq, Hash, Debug, Default)]
 pub enum ClientProtocol{
@@ -16,12 +36,19 @@ pub enum ClientProtocol{
     Idle,
     InitPlayerConnection,
     SyncExistingPlayerId,
+    RunTrigger,
 }
 
 #[derive(Event)]
 pub struct SyncPlayerIdEvent {
     pub player_id_host: String,
     pub player_id_client: String,
+}
+
+#[derive(Event)]
+pub struct SyncTriggerIndexEvent {
+    pub player_id: Uuid,
+    pub trigger_idx: usize,
 }
 
 #[derive(Resource)]
@@ -39,8 +66,45 @@ pub struct PlayerInfoStorage {
     pub players: Arc<Mutex<Vec<Arc<Mutex<PlayerInfo>>>>>,
 }
 
+#[derive(Resource)]
+pub struct UiUpdateTimer(pub Timer);
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct PacketAllStates {
+    player_id: String,
+    state_game: String,
+    state_cam_orbit_entity: String,
+    state_game_play_style: String,
+    state_level: String,
+    state_map_set: String,
+    state_menu: String,
+    state_turn: String,
+}
+
+#[derive(Resource)]
+pub struct HeartBeatMonitorTimer(pub Timer);
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct PacketHeartBeat {
+    player_id: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct PlayerHeartBeatStatus {
+    pub last_heartbeat: Instant,
+    // Additional fields can be added here, e.g., player status, connection info, etc.
+}
+
+#[derive(Clone, Debug, Resource)]
+pub struct ConnectedPlayers {
+    // Using a HashMap to map player UUIDs to metadata about their connection
+    pub players: Arc<Mutex<HashMap<Uuid, PlayerHeartBeatStatus>>>,
+}
+
 #[derive(Debug, Resource)]
 pub struct RunTrigger{
+    trigger_idx: i32,
+    triggers: Vec<String>,
     db_pipeline_player_init: bool,
     network_get_client_state_game: bool,
 }
@@ -58,6 +122,15 @@ impl MapSets {
         }
     }
 }
+
+#[derive(Component)]
+pub struct ConnectedPlayersNode;
+
+#[derive(Component)]
+pub struct PlayerStatusText;
+
+#[derive(Component)]
+pub struct TitleText;
 
 #[derive(Clone, Debug, FromRow, Serialize, Deserialize)]
 pub struct MapSet {
