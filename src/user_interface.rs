@@ -19,8 +19,8 @@ pub fn interface(
             info!("pressed: KeyD");  
             run_trigger.trigger_sub_one();
         }
-        if keys.just_released(KeyCode::KeyR) {
-            info!("pressed: KeyR");  
+        if keys.just_released(KeyCode::KeyF) {
+            info!("pressed: KeyF");  
             let players = connected_players.players.lock().unwrap();
             for player_id in players.keys() {
                 event_writer.send(SyncTriggerIndexEvent{
@@ -219,7 +219,7 @@ pub fn update_ui(
 
         let info_vec = vec![
             format!("( Shift + D ) <--- Client Run Trigger Index [{}] ---> ( Shift + E )", run_trigger.get_trigger_idx()),
-            format!("KeyF: All Clients Run Trigger: [{}]", run_trigger.get_triggers_ref()[run_trigger.get_trigger_idx()]),
+            format!("( Shift + F ) All Clients Run Trigger: [{}]", run_trigger.get_triggers_ref()[run_trigger.get_trigger_idx()]),
         ];
         for info in info_vec.iter() {
             commands.entity(connected_players_node).with_children(|parent| {

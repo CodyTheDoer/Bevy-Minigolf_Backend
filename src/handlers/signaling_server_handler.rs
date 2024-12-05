@@ -40,7 +40,7 @@ pub fn client_run_trigger(
         let trigger = triggers[target_idx].as_str();
         let peers: Vec<_> = socket.connected_peers().collect();
         for peer in peers {
-            let message = format!("({}, RunTrigger({}))", event.player_id.clone(), trigger);
+            let message = format!("({}, RunTrigger({:?}))", event.player_id.clone(), trigger);
             info!("Sending sync_player_id_init_system update: {message:?} to {peer}");
             socket.send(message.as_bytes().into(), peer);
         }
