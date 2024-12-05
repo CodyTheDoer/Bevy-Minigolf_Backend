@@ -11,12 +11,12 @@ pub fn interface(
     mut run_trigger: ResMut<RunTrigger>,
 ) {
     if keys.pressed(KeyCode::ShiftLeft) {
-        if keys.just_released(KeyCode::KeyE) {
-            info!("pressed: KeyE");  
-            run_trigger.trigger_add_one();
-        }
         if keys.just_released(KeyCode::KeyD) {
             info!("pressed: KeyD");  
+            run_trigger.trigger_add_one();
+        }
+        if keys.just_released(KeyCode::KeyE) {
+            info!("pressed: KeyE");  
             run_trigger.trigger_sub_one();
         }
         if keys.just_released(KeyCode::KeyF) {
@@ -27,6 +27,7 @@ pub fn interface(
                     player_id: *player_id, 
                     trigger_idx: run_trigger.get_trigger_idx(),
                 });
+                info!("post trigger:{:?}", &player_id);
             }
         }
     }
@@ -218,7 +219,8 @@ pub fn update_ui(
         }
 
         let info_vec = vec![
-            format!("( Shift + D ) <--- Client Run Trigger Index [{}] ---> ( Shift + E )", run_trigger.get_trigger_idx()),
+            // format!("Active Player: [{}]", run_trigger.get_trigger_idx()),
+            format!("( Shift + E ) <--- Client Run Trigger Index [{}] ---> ( Shift + D )", run_trigger.get_trigger_idx()),
             format!("( Shift + F ) All Clients Run Trigger: [{}]", run_trigger.get_triggers_ref()[run_trigger.get_trigger_idx()]),
         ];
         for info in info_vec.iter() {

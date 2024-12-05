@@ -35,6 +35,7 @@ pub fn client_run_trigger(
     mut socket: ResMut<MatchboxSocket<SingleChannel>>,
 ) {
     for event in event_reader.read() {
+        info!("client_run_trigger:{:?}", event.player_id.clone());
         let target_idx =  trigger.get_trigger_idx();
         let triggers = trigger.get_triggers_ref();
         let trigger = triggers[target_idx].as_str();
