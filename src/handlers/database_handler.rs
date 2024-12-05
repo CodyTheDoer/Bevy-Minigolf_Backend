@@ -6,7 +6,6 @@ use sqlx::{MySqlPool, Error};
 use uuid::Uuid;
 
 use crate::{
-    ClientProtocol,
     DatabasePool,
     PlayerInfo,
     PlayerInfoStorage,
@@ -17,7 +16,7 @@ use crate::{
 pub fn db_pipeline_player_init(
     pool: Res<DatabasePool>,
     runtime: ResMut<TokioTasksRuntime>, 
-    mut player_info_storage: ResMut<PlayerInfoStorage>,
+    player_info_storage: ResMut<PlayerInfoStorage>,
     mut run_trigger: ResMut<RunTrigger>,
 ) {
     info!("db_pipeline_player_init: pre");
@@ -75,7 +74,7 @@ pub async fn db_pipeline_player_init_async(
             if let Some(db_player_id) = db_player_id.clone() {
                 // Send the correct ID (from the database) to the client
                 ctx.run_on_main_thread(move |ctx| { 
-                    let mut event_writer = ctx.world.get_resource_mut::<Events<SyncPlayerIdEvent>>();
+                    let event_writer = ctx.world.get_resource_mut::<Events<SyncPlayerIdEvent>>();
                     if let Some(mut writer) = event_writer {
                         writer.send(SyncPlayerIdEvent {
                             player_id_host: db_player_id.to_string(), // Use the ID from the database
@@ -120,7 +119,7 @@ async fn fetch_player_ids_and_emails(
     }
 }
 
-async fn fetch_player_ids(
+async fn _fetch_player_ids(
     pool: &MySqlPool,
     ctx: &mut TaskContext,
 ) -> Result<Vec<(Option<Uuid>,)>, Error> {
@@ -141,7 +140,7 @@ async fn fetch_player_ids(
     }
 }
 
-async fn fetch_player_emails(
+async fn _fetch_player_emails(
     pool: &MySqlPool,
     ctx: &mut TaskContext,
 ) -> Result<Vec<(String,)>, Error> {
@@ -162,7 +161,7 @@ async fn fetch_player_emails(
     }
 }
 
-async fn update_player_id(
+async fn _update_player_id(
     pool: &MySqlPool,
     player: &PlayerInfo,
     player_email: &str,

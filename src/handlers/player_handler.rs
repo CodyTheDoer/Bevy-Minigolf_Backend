@@ -168,7 +168,7 @@ impl PlayerInfoStorage {
 
     pub fn get_last_player_id_string(&self) -> Option<String> {
         info!("PlayerInfoStorage: get_last_player_id_string");
-        let mut players = self.players.lock().unwrap().clone();
+        let players = self.players.lock().unwrap().clone();
         if let Some(last) = players.last() {
             let player_info = last.lock().unwrap().clone();
             let player_id = player_info.get_id();

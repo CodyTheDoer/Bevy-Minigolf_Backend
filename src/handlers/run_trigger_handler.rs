@@ -1,10 +1,26 @@
 use bevy::prelude::*;
 
-use crate::RunTrigger;
+use bevy_matchbox::prelude::*;
+
+use crate::{
+    RunTrigger,
+    SyncTriggerIndexEvent,
+};
 
 impl RunTrigger {
     pub fn new() -> Self {
         let triggers = vec![
+            String::from("camera_handler_cycle_state_camera"),
+            String::from("game_handler_game_start"),
+            String::from("game_handler_game_state_change_routines"),
+            String::from("game_handler_update_players_ref_ball_locations"),
+            String::from("game_handler_update_players_reset_ref_ball_locations "),
+            String::from("game_handler_update_players_store_current_ball_locations_to_ref"),
+            String::from("leader_board_log_game"),
+            String::from("leader_board_review_last_game"),
+            String::from("level_handler_set_state_next_level"),
+            String::from("level_handler_set_state_next_map_set"),
+            String::from("network_get_client_state_game"),
             String::from("party_handler_active_player_add_bonk"),
             String::from("party_handler_active_player_set_ball_location"),
             String::from("party_handler_active_player_set_hole_completion_state_true"),
@@ -14,19 +30,7 @@ impl RunTrigger {
             String::from("party_handler_new_player_remote"),
             String::from("party_handler_remove_ai"),
             String::from("party_handler_remove_last_player"),
-            String::from("network_get_client_state_all"),
-            String::from("network_get_client_state_game"),
-            String::from("game_handler_cycle_state_camera"),
-            String::from("game_handler_cycle_state_map_set"),
-            String::from("game_handler_cycle_current_level"),
-            String::from("game_handler_get_active_ball_location"),
-            String::from("game_handler_reset_active_ball_location"),
-            String::from("game_handler_set_active_ball_location"),
-            String::from("game_handler_state_turn_next_player_turn"),
-            String::from("game_handler_start_game_local"),
-            String::from("game_handler_toggle_state_game"),
-            String::from("leader_board_log_game"),
-            String::from("leader_board_review_last_game"),
+            String::from("turn_handler_set_turn_next"),
         ];
         Self{
             trigger_idx: 0,
@@ -98,5 +102,24 @@ impl RunTrigger {
 
     pub fn network_get_client_state_game(&self) -> bool {
         self.network_get_client_state_game
+    }
+}
+
+pub fn client_run_trigger(
+    trigger: ResMut<RunTrigger>,
+    mut event_reader: EventReader<SyncTriggerIndexEvent>,
+    mut socket: ResMut<MatchboxSocket<SingleChannel>>,
+) {
+    for event in event_reader.read() {
+        info!("client_run_trigger:{:?}", event.player_id.clone());
+        let target_idx =  trigger.get_trigger_idx();
+        let triggers = trigger.get_triggers_ref();
+        let trigger = triggers[target_idx].as_str();
+        let peers: Vec<_> = socket.connected_peers().collect();
+        for peer in peers {
+            let message = format!("({}, RunTrigger({:?}))", event.player_id.clone(), trigger);
+            info!("Sending sync_player_id_init_system update: {message:?} to {peer}");
+            socket.send(message.as_bytes().into(), peer);
+        }
     }
 }

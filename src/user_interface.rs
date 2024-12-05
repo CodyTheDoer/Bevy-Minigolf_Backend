@@ -132,7 +132,7 @@ pub fn setup_ui(
 pub fn ui_update_system(
     time: Res<Time>,
     mut timer: ResMut<UiUpdateTimer>,
-    mut commands: Commands,
+    commands: Commands,
     connected_players: Res<ConnectedPlayers>,
     query: Query<Entity, With<ConnectedPlayersNode>>,
     asset_server: Res<AssetServer>,

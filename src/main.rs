@@ -4,7 +4,6 @@ use bevy::{prelude::*,
     input::common_conditions::*,
 };
 
-use bevy_matchbox::prelude::*;
 use dotenv::dotenv;
 use std::{
         time::Duration,
@@ -33,24 +32,20 @@ use minigolf_backend_server::user_interface::{
     ui_update_system,
 };
 
-use minigolf_backend_server::handlers::database_handler::{
-    db_pipeline_player_init,
-    sync_player_id_init_system,
-};
-
-
-use minigolf_backend_server::handlers::map_set_handler::{
-    client_sync_protocol_send_existing_map_sets,
-    first_time_boot_setup_map_set,
-};
-
-use minigolf_backend_server::handlers::signaling_server_handler::{
-    client_run_trigger,
-    heartbeat_monitor_system,
-    network_get_client_state_game,
-    receive_client_requests,
-    start_host_socket,
-    start_signaling_server,
+use minigolf_backend_server::handlers::{
+    database_handler::{
+        db_pipeline_player_init,
+        sync_player_id_init_system,
+    },
+    heartbeat_handler::heartbeat_monitor_system,
+    map_set_handler::first_time_boot_setup_map_set,
+    run_trigger_handler::client_run_trigger,
+    signaling_server_handler::{
+        network_get_client_state_game,
+        receive_client_requests,
+        start_host_socket,
+        start_signaling_server,
+    },
 };
 
 async fn establish_connection() -> sqlx::Result<sqlx::Pool<sqlx::MySql>> {

@@ -7,10 +7,6 @@ use std::{
         SocketAddrV4
     }, 
     str::FromStr,
-    time::{
-        Duration,
-        Instant,
-    },
 };
 use regex::Regex;
 use rmp_serde::decode;
@@ -20,33 +16,12 @@ use uuid::Uuid;
 use crate::{
     ClientProtocol,
     ConnectedPlayers,
-    HeartBeatMonitorTimer,
     PacketAllStates,
     PacketHeartBeat,
     PlayerInfo,
     PlayerInfoStorage,
     RunTrigger,
-    SyncTriggerIndexEvent,
 };
-
-pub fn client_run_trigger(
-    trigger: ResMut<RunTrigger>,
-    mut event_reader: EventReader<SyncTriggerIndexEvent>,
-    mut socket: ResMut<MatchboxSocket<SingleChannel>>,
-) {
-    for event in event_reader.read() {
-        info!("client_run_trigger:{:?}", event.player_id.clone());
-        let target_idx =  trigger.get_trigger_idx();
-        let triggers = trigger.get_triggers_ref();
-        let trigger = triggers[target_idx].as_str();
-        let peers: Vec<_> = socket.connected_peers().collect();
-        for peer in peers {
-            let message = format!("({}, RunTrigger({:?}))", event.player_id.clone(), trigger);
-            info!("Sending sync_player_id_init_system update: {message:?} to {peer}");
-            socket.send(message.as_bytes().into(), peer);
-        }
-    }
-}
 
 pub fn start_signaling_server(mut commands: Commands) {
     info!("Starting signaling server");
@@ -69,29 +44,6 @@ pub fn start_signaling_server(mut commands: Commands) {
     commands.insert_resource(signaling_server);
 }
 
-pub fn heartbeat_monitor_system(
-    time: Res<Time>,
-    mut timer: ResMut<HeartBeatMonitorTimer>,
-    mut connected_players: ResMut<ConnectedPlayers>,
-) {
-    // Check if the timer has finished
-    if timer.0.tick(time.delta()).finished() {
-        info!("heartbeat_monitor_system:");
-        let timeout_duration = Duration::from_secs(15);
-        let mut players = connected_players.players.lock().unwrap();
-        let now = Instant::now();
-
-        // Find and remove players who have not sent a heartbeat in the last `timeout_duration`
-        players.retain(|player_id, player_status| {
-            let is_active = now.duration_since(player_status.last_heartbeat) < timeout_duration;
-            if !is_active {
-                warn!("Removing player {} due to timeout.", player_id);
-            }
-            is_active
-        });
-    }
-}
-
 pub fn start_host_socket(mut commands: Commands) {
     let socket = MatchboxSocket::new_reliable("ws://localhost:3536/minigolf");
     commands.insert_resource(socket);
@@ -99,8 +51,8 @@ pub fn start_host_socket(mut commands: Commands) {
 
 pub fn receive_client_requests(
     mut socket: ResMut<MatchboxSocket<SingleChannel>>,
-    mut connected_players: ResMut<ConnectedPlayers>,
-    mut player_info_storage: ResMut<PlayerInfoStorage>,
+    connected_players: ResMut<ConnectedPlayers>,
+    player_info_storage: ResMut<PlayerInfoStorage>,
     mut run_trigger: ResMut<RunTrigger>,
     client_protocol: Res<State<ClientProtocol>>, 
     mut set_client_protocol: ResMut<NextState<ClientProtocol>>,
@@ -147,7 +99,7 @@ pub fn receive_client_requests(
                             };
                         }
                         "PacketAllStates" => {
-                            info!("Packet: AllStates Payload: {}", payload.clone());
+                            info!("Packet: AllStates Payload: {}", payload);
                             
                             // Deserialize the payload using JSON
                             // If payload itself is JSON as a string, deserialize it again
@@ -162,7 +114,7 @@ pub fn receive_client_requests(
                             }
                         }
                         "PacketHeartBeat" => {
-                            info!("Packet: HeartBeat Payload: {}", payload.clone());
+                            info!("Packet: HeartBeat Payload: {}", payload);
                             
                             // Deserialize the payload using JSON
                             // If payload itself is JSON as a string, deserialize it again
@@ -217,19 +169,6 @@ pub fn send_client_state_update(
     }
 }
 
-
-                        // "REQUEST_FULL_MAP_SETS" => {
-                        //     match encode::to_vec(&*map_sets) {
-                        //         Ok(serialized_map_sets) => {
-                        //             socket.send(serialized_map_sets.into(), _id);
-                        //             info!("Sent full map sets to peer: {:?}", _id);
-                        //         }
-                        //         Err(ser_err) => {
-                        //             error!("Failed to serialize map sets for sending: {:?}", ser_err);
-                        //         }
-                        //     }
-                        // },
-
 pub fn network_get_client_state_game(
     mut socket: ResMut<MatchboxSocket<SingleChannel>>,
     mut run_trigger: ResMut<RunTrigger>,
@@ -243,3 +182,15 @@ pub fn network_get_client_state_game(
     }
     run_trigger.set_target("network_get_client_state_game", false);
 }
+
+                        // "REQUEST_FULL_MAP_SETS" => {
+                        //     match encode::to_vec(&*map_sets) {
+                        //         Ok(serialized_map_sets) => {
+                        //             socket.send(serialized_map_sets.into(), _id);
+                        //             info!("Sent full map sets to peer: {:?}", _id);
+                        //         }
+                        //         Err(ser_err) => {
+                        //             error!("Failed to serialize map sets for sending: {:?}", ser_err);
+                        //         }
+                        //     }
+                        // },
