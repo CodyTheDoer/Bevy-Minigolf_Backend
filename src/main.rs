@@ -45,6 +45,7 @@ use minigolf_backend_server::handlers::map_set_handler::{
 };
 
 use minigolf_backend_server::handlers::signaling_server_handler::{
+    client_run_trigger,
     heartbeat_monitor_system,
     network_get_client_state_game,
     receive_client_requests,
@@ -90,41 +91,23 @@ fn main() {
         .insert_resource(PlayerInfoStorage::new())
         .insert_resource(RunTrigger::new())
 
-        .insert_resource(UiUpdateTimer(Timer::new(Duration::from_secs(1), TimerMode::Repeating)))
+        .insert_resource(UiUpdateTimer(Timer::new(Duration::from_millis(250), TimerMode::Repeating)))
         .insert_resource(HeartBeatMonitorTimer(Timer::new(Duration::from_secs(5), TimerMode::Repeating)))
         
         // .add_systems(Update, send_message.run_if(on_timer(Duration::from_secs(5))))
         .add_systems(Startup, (start_signaling_server, start_host_socket).chain())
         .add_systems(Startup, setup_ui)
 
-        .add_systems(Update, interface.run_if(input_just_released(KeyCode::ShiftLeft)))
+        .add_systems(Update, interface)
         .add_systems(Update, sync_player_id_init_system)
         .add_systems(Update, receive_client_requests)
         .add_systems(Update, heartbeat_monitor_system)
         .add_systems(Update, client_run_trigger)
         .add_systems(Update, first_time_boot_setup_map_set.run_if(input_just_released(KeyCode::Space)))
-        .add_systems(Update, client_sync_protocol_send_existing_map_sets.run_if(input_just_released(KeyCode::KeyZ)))
         .add_systems(Update, db_pipeline_player_init.run_if(|run_trigger: Res<RunTrigger>|run_trigger.db_pipeline_player_init()))
         .add_systems(Update, network_get_client_state_game.run_if(|run_trigger: Res<RunTrigger>|run_trigger.network_get_client_state_game()))
         .add_systems(Update, ui_update_system)                
+        // .add_systems(Update, client_sync_protocol_send_existing_map_sets.run_if(input_just_released(KeyCode::KeyZ)))
 
         .run();
-}
-
-pub fn client_run_trigger(
-    trigger: ResMut<RunTrigger>,
-    mut event_reader: EventReader<SyncTriggerIndexEvent>,
-    mut socket: ResMut<MatchboxSocket<SingleChannel>>,
-) {
-    for event in event_reader.read() {
-        let target_idx =  trigger.get_trigger_idx();
-        let triggers = trigger.get_triggers_ref();
-        let trigger = triggers[target_idx].as_str();
-        let peers: Vec<_> = socket.connected_peers().collect();
-        for peer in peers {
-            let message = format!("({}, RunTrigger({}))", event.player_id.clone(), trigger);
-            info!("Sending sync_player_id_init_system update: {message:?} to {peer}");
-            socket.send(message.as_bytes().into(), peer);
-        }
-    }
 }

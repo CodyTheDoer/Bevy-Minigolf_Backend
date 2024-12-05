@@ -1,17 +1,7 @@
 use bevy::prelude::*;
 
-use bevy_matchbox::prelude::*;
-
 use crate::{
-    CameraUi,
-    ClientProtocol,
-    ConnectedPlayers,
-    ConnectedPlayersNode,
-    Fonts,
-    RunTrigger,
-    SyncTriggerIndexEvent,
-    TitleText,
-    UiUpdateTimer,
+    CameraUi, ConnectedPlayers, ConnectedPlayersNode, Fonts, RunTrigger, SyncTriggerIndexEvent, TitleText, UiUpdateTimer
 };
 
 pub fn interface(
@@ -20,31 +10,24 @@ pub fn interface(
     mut event_writer: EventWriter<SyncTriggerIndexEvent>,
     mut run_trigger: ResMut<RunTrigger>,
 ) {
-    if keys.pressed(KeyCode::KeyG) {
-        info!("pressed: KeyG");  
-        run_trigger.set_target("network_get_client_state_game", true);
-    };
-
-    if keys.pressed(KeyCode::KeyE) {
-        info!("pressed: KeyE");  
-        info!("RunTrigger.trigger_idx += 1");  
-        let current_idx = run_trigger.get_trigger_idx();
-        run_trigger.set_trigger_idx(current_idx + 1);
-    }
-    if keys.pressed(KeyCode::KeyD) {
-        info!("pressed: KeyD");  
-        info!("RunTrigger.trigger_idx -= 1");  
-        let current_idx = run_trigger.get_trigger_idx();
-        run_trigger.set_trigger_idx(current_idx - 1);
-    }
-    if keys.pressed(KeyCode::KeyR) {
-        info!("pressed: KeyR");  
-        let players = connected_players.players.lock().unwrap();
-        for player_id in players.keys() {
-            event_writer.send(SyncTriggerIndexEvent{
-                player_id: *player_id, 
-                trigger_idx: run_trigger.get_trigger_idx(),
-            });
+    if keys.pressed(KeyCode::ShiftLeft) {
+        if keys.just_released(KeyCode::KeyE) {
+            info!("pressed: KeyE");  
+            run_trigger.trigger_add_one();
+        }
+        if keys.just_released(KeyCode::KeyD) {
+            info!("pressed: KeyD");  
+            run_trigger.trigger_sub_one();
+        }
+        if keys.just_released(KeyCode::KeyR) {
+            info!("pressed: KeyR");  
+            let players = connected_players.players.lock().unwrap();
+            for player_id in players.keys() {
+                event_writer.send(SyncTriggerIndexEvent{
+                    player_id: *player_id, 
+                    trigger_idx: run_trigger.get_trigger_idx(),
+                });
+            }
         }
     }
 }
@@ -63,7 +46,7 @@ pub fn setup_ui(
     };
     let matrix_display_small = TextStyle {
         font: font.clone(),
-        font_size: 14.0,
+        font_size: 12.0,
         ..default()
     };
     fonts.fonts.push(matrix_display);
@@ -153,11 +136,12 @@ pub fn ui_update_system(
     query: Query<Entity, With<ConnectedPlayersNode>>,
     asset_server: Res<AssetServer>,
     fonts: ResMut<Fonts>,
+    run_trigger: Res<RunTrigger>,
 ) {
     // Check if the timer has finished
     if timer.0.tick(time.delta()).finished() {
         // Call the function to update the connected players UI
-        update_ui(commands, connected_players, query, asset_server, fonts);
+        update_ui(commands, connected_players, query, asset_server, fonts, run_trigger);
     }
 }
 
@@ -167,6 +151,7 @@ pub fn update_ui(
     query: Query<Entity, With<ConnectedPlayersNode>>,
     asset_server: Res<AssetServer>,
     mut fonts: ResMut<Fonts>,
+    run_trigger: Res<RunTrigger>,
 ) {
     // Load and setup fonts
     let font = asset_server.load("fonts/MatrixtypeDisplay-KVELZ.ttf");
@@ -224,6 +209,43 @@ pub fn update_ui(
                                     format!("Last heartbeat: {:?}", player_status.last_heartbeat),
                                     matrix_display_small.clone(),
                                 )],
+                                ..default()
+                            },
+                            ..default()
+                        });
+                    });
+            });
+        }
+
+        let info_vec = vec![
+            format!("( Shift + D ) <--- Client Run Trigger Index [{}] ---> ( Shift + E )", run_trigger.get_trigger_idx()),
+            format!("KeyF: All Clients Run Trigger: [{}]", run_trigger.get_triggers_ref()[run_trigger.get_trigger_idx()]),
+        ];
+        for info in info_vec.iter() {
+            commands.entity(connected_players_node).with_children(|parent| {
+                parent
+                    .spawn(NodeBundle {
+                        style: Style {
+                            display: Display::Flex,
+                            flex_direction: FlexDirection::Row, // Arrange items horizontally within the row
+                            align_items: AlignItems::Center,    // Center items vertically within the row
+                            margin: UiRect::all(Val::Px(5.0)),  // Add some spacing between rows
+                            ..default()
+                        },
+                        ..default()
+                    })
+                    .with_children(|row| {
+                        // Player ID text
+                        row.spawn(TextBundle {
+                            text: Text {
+                                sections: vec![TextSection::new(
+                                    format!("{}", info),
+                                    matrix_display_small.clone(),
+                                )],
+                                ..default()
+                            },
+                            style: Style {
+                                margin: UiRect::right(Val::Px(10.0)), // Spacing between player ID and other fields
                                 ..default()
                             },
                             ..default()

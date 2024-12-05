@@ -48,6 +48,24 @@ impl RunTrigger {
         self.trigger_idx = idx as i32;
     }
 
+    pub fn trigger_add_one(&mut self) {
+        let len_check = self.triggers.len();
+        if self.trigger_idx == len_check as i32 - 1 {
+            self.set_trigger_idx(0);
+        } else {
+            self.trigger_idx += 1;
+        }
+    }
+
+    pub fn trigger_sub_one(&mut self) {
+        let len_check = self.triggers.len();
+        if self.trigger_idx == 0 {
+            self.set_trigger_idx(len_check - 1);
+        } else {
+            self.trigger_idx -= 1;
+        }
+    }
+
     pub fn get(&self, target: &str) -> bool {
         match target {
             "network_get_client_state_game" => {
