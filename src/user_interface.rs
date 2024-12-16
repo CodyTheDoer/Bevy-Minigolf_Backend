@@ -1,42 +1,27 @@
 use bevy::prelude::*;
 
 use crate::{
-    CameraUi, ConnectedPlayers, ConnectedPlayersNode, Fonts, RunTrigger, SyncTriggerIndexEvent, TitleText, UiUpdateTimer
+    EasyVecUiCamera,
+    EasyVecUiFonts, 
+    EasyVecUiNode,
+    EasyVecUiTitleText, 
+    EasyVecUiUpdateTimer,
 };
 
 pub fn interface(
     keys: Res<ButtonInput<KeyCode>>,
-    connected_players: Res<ConnectedPlayers>,
-    mut event_writer: EventWriter<SyncTriggerIndexEvent>,
-    mut run_trigger: ResMut<RunTrigger>,
 ) {
     if keys.pressed(KeyCode::ShiftLeft) {
         if keys.just_released(KeyCode::KeyD) {
-            info!("pressed: KeyD");  
-            run_trigger.trigger_add_one();
-        }
-        if keys.just_released(KeyCode::KeyE) {
-            info!("pressed: KeyE");  
-            run_trigger.trigger_sub_one();
-        }
-        if keys.just_released(KeyCode::KeyF) {
-            info!("pressed: KeyF");  
-            let players = connected_players.players.lock().unwrap();
-            for player_id in players.keys() {
-                event_writer.send(SyncTriggerIndexEvent{
-                    player_id: *player_id, 
-                    trigger_idx: run_trigger.get_trigger_idx(),
-                });
-                info!("post trigger:{:?}", &player_id);
-            }
-        }
+            info!("pressed: KeyD");
+        };
     }
 }
 
 pub fn setup_ui(
     asset_server: Res<AssetServer>,
     mut commands: Commands,
-    mut fonts: ResMut<Fonts>,
+    mut fonts: ResMut<EasyVecUiFonts>,
 ) {
     // Load and setup fonts
     let font = asset_server.load("fonts/MatrixtypeDisplay-KVELZ.ttf");
@@ -53,7 +38,7 @@ pub fn setup_ui(
     fonts.fonts.push(matrix_display);
     fonts.fonts.push(matrix_display_small);
 
-    // Set up a 2D camera for the UI
+    // Set up a 2D camera for the Ui
     commands.spawn((
         Camera2dBundle {
             transform: Transform::from_xyz(0.0, 0.0, 0.0),
@@ -63,10 +48,10 @@ pub fn setup_ui(
             },
             ..default()
         },
-        CameraUi,
+        EasyVecUiCamera,
     ));
 
-    // Title: Create a screen-sized UI node for the centered title
+    // Title: Create a screen-sized Ui node for the centered title
     commands
         .spawn(NodeBundle {
             style: Style {
@@ -86,18 +71,18 @@ pub fn setup_ui(
                 TextBundle {
                     text: Text {
                         sections: vec![TextSection::new(
-                            "Minigolf Backend Server: UI",
+                            "Easy Vec to Ui Interface",
                             fonts.fonts[0].clone(),
                         )],
                         ..default()
                     },
                     ..default()
                 },
-                TitleText, // Tag the title text so it can be updated later
+                EasyVecUiTitleText, // Tag the title text so it can be updated later
             ));
         });
 
-    // HUD: Create a UI node to display connected players
+    // HUD: Create a Ui node to display connected players
     commands
         .spawn(NodeBundle {
             style: Style {
@@ -124,35 +109,39 @@ pub fn setup_ui(
                     },
                     ..default()
                 },
-                ConnectedPlayersNode, // Tag the node for easy updates later
+                EasyVecUiNode, // Tag the node for easy updates later
             ));
         });
 }
 
 pub fn ui_update_system(
     time: Res<Time>,
-    mut timer: ResMut<UiUpdateTimer>,
+    mut timer: ResMut<EasyVecUiUpdateTimer>,
     commands: Commands,
-    connected_players: Res<ConnectedPlayers>,
-    query: Query<Entity, With<ConnectedPlayersNode>>,
     asset_server: Res<AssetServer>,
-    fonts: ResMut<Fonts>,
-    run_trigger: Res<RunTrigger>,
+    fonts: ResMut<EasyVecUiFonts>,
+    query: Query<Entity, With<EasyVecUiNode>>,
 ) {
     // Check if the timer has finished
     if timer.0.tick(time.delta()).finished() {
-        // Call the function to update the connected players UI
-        update_ui(commands, connected_players, query, asset_server, fonts, run_trigger);
+        let temp_vec = vec![
+            String::from("Temp"),
+            String::from("Vec"),
+            String::from("Ui"),
+            String::from("DATA"),
+            String::from("Points"),
+        ];
+        // Call the function to update the connected players Ui
+        update_ui(temp_vec , query, commands, asset_server, fonts);
     }
 }
 
 pub fn update_ui(
+    connected_players: Vec<String>,
+    query: Query<Entity, With<EasyVecUiNode>>,
     mut commands: Commands,
-    connected_players: Res<ConnectedPlayers>,
-    query: Query<Entity, With<ConnectedPlayersNode>>,
     asset_server: Res<AssetServer>,
-    mut fonts: ResMut<Fonts>,
-    run_trigger: Res<RunTrigger>,
+    mut fonts: ResMut<EasyVecUiFonts>,
 ) {
     // Load and setup fonts
     let font = asset_server.load("fonts/MatrixtypeDisplay-KVELZ.ttf");
@@ -163,16 +152,12 @@ pub fn update_ui(
     };
     fonts.fonts.push(matrix_display_small.clone());
 
-    // Find the entity representing the node that displays connected players
+    
     if let Ok(connected_players_node) = query.get_single() {
-        // Clear existing children (if any) to refresh the UI
         commands.entity(connected_players_node).despawn_descendants();
 
-        // Lock the connected players to read player data
-        let players_guard = connected_players.players.lock().unwrap();
-        
         // Iterate over each player and create a row for each one
-        for (uuid, player_status) in players_guard.iter() {
+        for status in connected_players.iter() {
             // Spawn a new node for each player, representing a row
             commands.entity(connected_players_node).with_children(|parent| {
                 parent
@@ -191,7 +176,7 @@ pub fn update_ui(
                         row.spawn(TextBundle {
                             text: Text {
                                 sections: vec![TextSection::new(
-                                    format!("Player ID: {}", uuid),
+                                    format!("{}", status),
                                     matrix_display_small.clone(),
                                 )],
                                 ..default()
@@ -202,27 +187,14 @@ pub fn update_ui(
                             },
                             ..default()
                         });
-
-                        // Last Heartbeat text
-                        row.spawn(TextBundle {
-                            text: Text {
-                                sections: vec![TextSection::new(
-                                    format!("Last heartbeat: {:?}", player_status.last_heartbeat),
-                                    matrix_display_small.clone(),
-                                )],
-                                ..default()
-                            },
-                            ..default()
-                        });
                     });
             });
         }
 
         let info_vec = vec![
-            // format!("Active Player: [{}]", run_trigger.get_trigger_idx()),
-            format!("( Shift + E ) <--- Client Run Trigger Index [{}] ---> ( Shift + D )", run_trigger.get_trigger_idx()),
-            format!("( Shift + F ) All Clients Run Trigger: [{}]", run_trigger.get_triggers_ref()[run_trigger.get_trigger_idx()]),
-        ];
+            format!("________________________________________"),
+            format!("________________________________________"),
+            ];
         for info in info_vec.iter() {
             commands.entity(connected_players_node).with_children(|parent| {
                 parent
