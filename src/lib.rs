@@ -8,10 +8,34 @@ use std::time::Duration;
 // setup_ui,
 // ui_update_system,
 
-pub struct BevyEasyVecUiPlugin;
+pub struct BevyEasyVecUiPlugin {
+    font_path: String,
+    camera_layer: i32,
+    title_font_size: f32,
+    data_font_size: f32,
+}
+
+impl BevyEasyVecUiPlugin {
+    pub fn init(font_path: &str, camera_layer: i32, title_font_size: f32, data_font_size: f32) -> Self {
+        let font_path = String::from(font_path);
+        Self { 
+            font_path,
+            camera_layer,
+            title_font_size,
+            data_font_size,
+        }
+    }
+}
 
 impl Plugin for BevyEasyVecUiPlugin {
     fn build(&self, app: &mut App) {
+        
+        app.insert_resource(EasyVecUiFont {
+            font_path: self.font_path.clone(),
+            camera_layer: self.camera_layer.clone(),
+            title_font_size: self.title_font_size.clone(),
+            data_font_size: self.data_font_size.clone(),
+        });
         app.insert_resource(EasyVecUiFonts::new());
         app.insert_resource(EasyVecUiUpdateTimer(Timer::new(Duration::from_millis(250), TimerMode::Repeating)));
         app.add_systems(Startup, setup_ui);
@@ -22,22 +46,23 @@ impl Plugin for BevyEasyVecUiPlugin {
 pub fn setup_ui(
     asset_server: Res<AssetServer>,
     mut commands: Commands,
+    user_font: Res<EasyVecUiFont>,
     mut fonts: ResMut<EasyVecUiFonts>,
 ) {
     // Load and setup fonts
-    let font = asset_server.load("fonts/MatrixtypeDisplay-KVELZ.ttf");
-    let matrix_display = TextStyle {
+    let font = asset_server.load(&user_font.font_path);
+    let title_display = TextStyle {
         font: font.clone(),
-        font_size: 42.0,
+        font_size: user_font.title_font_size,
         ..default()
     };
-    let matrix_display_small = TextStyle {
-        font: font.clone(),
-        font_size: 12.0,
+    let data_display = TextStyle {
+        font: font,
+        font_size: user_font.data_font_size,
         ..default()
     };
-    fonts.fonts.push(matrix_display);
-    fonts.fonts.push(matrix_display_small);
+    fonts.fonts.push(title_display);
+    fonts.fonts.push(data_display);
 
     // Set up a 2D camera for the Ui
     commands.spawn((
@@ -236,6 +261,14 @@ pub struct EasyVecUiCamera;
 
 #[derive(Component)]
 pub struct EasyVecUiNode;
+
+#[derive(Resource)]
+pub struct EasyVecUiFont {
+    pub font_path: String,
+    pub camera_layer: i32,
+    pub title_font_size: f32,
+    pub data_font_size: f32,
+}
 
 #[derive(Resource)]
 pub struct EasyVecUiFonts {
