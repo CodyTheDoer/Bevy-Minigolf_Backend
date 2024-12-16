@@ -19,7 +19,6 @@ fn main() {
 fn easy_vec_ui(mut easy_vec_ui_resource: ResMut<EasyVecUi>) {
     let left_data_vec = vec![
             String::from("Left"),
-            String::from("Temp"),
             String::from("Vec"),
             String::from("Ui"),
             String::from("DATA"),
@@ -27,7 +26,6 @@ fn easy_vec_ui(mut easy_vec_ui_resource: ResMut<EasyVecUi>) {
         ];
     let right_data_vec = vec![
             String::from("Right"),
-            String::from("Temp"),
             String::from("Vec"),
             String::from("Ui"),
             String::from("DATA"),

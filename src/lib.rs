@@ -152,7 +152,7 @@ pub fn setup_ui(
                 position_type: PositionType::Absolute,
                 bottom: Val::Percent(0.0), // Position at the bottom of the screen
                 left: Val::Percent(0.0),   // Align it to the left of the screen
-                padding: UiRect::all(Val::Px(10.0)),
+                padding: UiRect::all(Val::Px(8.0)),
                 ..default()
             },
             ..default()
@@ -182,7 +182,7 @@ pub fn setup_ui(
                 position_type: PositionType::Absolute,
                 bottom: Val::Percent(0.0), // Position at the bottom of the screen
                 right: Val::Percent(0.0),   // Align it to the left of the screen
-                padding: UiRect::all(Val::Px(10.0)),
+                padding: UiRect::all(Val::Px(8.0)),
                 ..default()
             },
             ..default()
