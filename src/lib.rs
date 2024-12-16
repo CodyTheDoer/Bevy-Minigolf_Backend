@@ -10,19 +10,53 @@ use std::time::Duration;
 
 pub struct BevyEasyVecUiPlugin {
     font_path: String,
-    camera_layer: i32,
+    camera_layer: isize,
     title_font_size: f32,
+    title: String,
     data_font_size: f32,
+    pub data_vec: Vec<String>,
 }
 
 impl BevyEasyVecUiPlugin {
-    pub fn init(font_path: &str, camera_layer: i32, title_font_size: f32, data_font_size: f32) -> Self {
-        let font_path = String::from(font_path);
-        Self { 
-            font_path,
-            camera_layer,
-            title_font_size,
-            data_font_size,
+    pub fn init(font_path: &str) -> Self {
+        Self {
+            font_path: String::from(font_path),
+            camera_layer: -1,
+            title_font_size: 42.0,
+            title: String::from("Default title:"),
+            data_font_size: 12.0,
+            data_vec: Vec::new(),
+        }
+    }
+
+    pub fn camera_layer(mut self, layer: isize) -> Self {
+        self.camera_layer = layer;
+        self
+    }
+
+    pub fn title(mut self, title: &str) -> Self {
+        self.title = String::from(title);
+        self
+    }
+
+    pub fn title_font_size(mut self, size: f32) -> Self {
+        self.title_font_size = size;
+        self
+    }
+
+    pub fn data_font_size(mut self, size: f32) -> Self {
+        self.data_font_size = size;
+        self
+    }
+
+    pub fn build(self) -> BevyEasyVecUiPlugin {
+        BevyEasyVecUiPlugin {
+            font_path: self.font_path,
+            camera_layer: self.camera_layer,
+            title_font_size: self.title_font_size,
+            title: self.title,
+            data_font_size: self.data_font_size,
+            data_vec: self.data_vec,
         }
     }
 }
@@ -30,11 +64,13 @@ impl BevyEasyVecUiPlugin {
 impl Plugin for BevyEasyVecUiPlugin {
     fn build(&self, app: &mut App) {
         
-        app.insert_resource(EasyVecUiFont {
+        app.insert_resource(EasyVecUi {
             font_path: self.font_path.clone(),
             camera_layer: self.camera_layer.clone(),
             title_font_size: self.title_font_size.clone(),
+            title: self.title.clone(),
             data_font_size: self.data_font_size.clone(),
+            data_vec: self.data_vec.clone(),
         });
         app.insert_resource(EasyVecUiFonts::new());
         app.insert_resource(EasyVecUiUpdateTimer(Timer::new(Duration::from_millis(250), TimerMode::Repeating)));
@@ -46,19 +82,19 @@ impl Plugin for BevyEasyVecUiPlugin {
 pub fn setup_ui(
     asset_server: Res<AssetServer>,
     mut commands: Commands,
-    user_font: Res<EasyVecUiFont>,
+    user_supplied: Res<EasyVecUi>,
     mut fonts: ResMut<EasyVecUiFonts>,
 ) {
     // Load and setup fonts
-    let font = asset_server.load(&user_font.font_path);
+    let font = asset_server.load(&user_supplied.font_path);
     let title_display = TextStyle {
         font: font.clone(),
-        font_size: user_font.title_font_size,
+        font_size: user_supplied.title_font_size,
         ..default()
     };
     let data_display = TextStyle {
         font: font,
-        font_size: user_font.data_font_size,
+        font_size: user_supplied.data_font_size,
         ..default()
     };
     fonts.fonts.push(title_display);
@@ -69,7 +105,7 @@ pub fn setup_ui(
         Camera2dBundle {
             transform: Transform::from_xyz(0.0, 0.0, 0.0),
             camera: Camera {
-                order: -1, // Render before the 3D scene
+                order: user_supplied.camera_layer, // Render before the 3D scene
                 ..default()
             },
             ..default()
@@ -97,7 +133,7 @@ pub fn setup_ui(
                 TextBundle {
                     text: Text {
                         sections: vec![TextSection::new(
-                            "Easy Vec to Ui Interface",
+                            &user_supplied.title,
                             fonts.fonts[0].clone(),
                         )],
                         ..default()
@@ -147,23 +183,17 @@ pub fn ui_update_system(
     asset_server: Res<AssetServer>,
     fonts: ResMut<EasyVecUiFonts>,
     query: Query<Entity, With<EasyVecUiNode>>,
+    user_supplied: Res<EasyVecUi>,
 ) {
     // Check if the timer has finished
     if timer.0.tick(time.delta()).finished() {
-        let temp_vec = vec![
-            String::from("Temp"),
-            String::from("Vec"),
-            String::from("Ui"),
-            String::from("DATA"),
-            String::from("Points"),
-        ];
         // Call the function to update the connected players Ui
-        update_ui(temp_vec , query, commands, asset_server, fonts);
+        update_ui(&user_supplied.data_vec, query, commands, asset_server, fonts);
     }
 }
 
 pub fn update_ui(
-    connected_players: Vec<String>,
+    connected_players: &Vec<String>,
     query: Query<Entity, With<EasyVecUiNode>>,
     mut commands: Commands,
     asset_server: Res<AssetServer>,
@@ -188,6 +218,7 @@ pub fn update_ui(
             commands.entity(connected_players_node).with_children(|parent| {
                 parent
                     .spawn(NodeBundle {
+                        background_color: BackgroundColor(Color::srgba(0.1, 0.1, 0.1, 0.25)), // Semi-transparent dark background
                         style: Style {
                             display: Display::Flex,
                             flex_direction: FlexDirection::Row, // Arrange items horizontally within the row
@@ -216,43 +247,6 @@ pub fn update_ui(
                     });
             });
         }
-
-        let info_vec = vec![
-            format!("________________________________________"),
-            format!("________________________________________"),
-            ];
-        for info in info_vec.iter() {
-            commands.entity(connected_players_node).with_children(|parent| {
-                parent
-                    .spawn(NodeBundle {
-                        style: Style {
-                            display: Display::Flex,
-                            flex_direction: FlexDirection::Row, // Arrange items horizontally within the row
-                            align_items: AlignItems::Center,    // Center items vertically within the row
-                            margin: UiRect::all(Val::Px(5.0)),  // Add some spacing between rows
-                            ..default()
-                        },
-                        ..default()
-                    })
-                    .with_children(|row| {
-                        // Player ID text
-                        row.spawn(TextBundle {
-                            text: Text {
-                                sections: vec![TextSection::new(
-                                    format!("{}", info),
-                                    matrix_display_small.clone(),
-                                )],
-                                ..default()
-                            },
-                            style: Style {
-                                margin: UiRect::right(Val::Px(10.0)), // Spacing between player ID and other fields
-                                ..default()
-                            },
-                            ..default()
-                        });
-                    });
-            });
-        }
     }
 }
 
@@ -262,12 +256,20 @@ pub struct EasyVecUiCamera;
 #[derive(Component)]
 pub struct EasyVecUiNode;
 
-#[derive(Resource)]
-pub struct EasyVecUiFont {
+#[derive(Clone, Resource)]
+pub struct EasyVecUi {
     pub font_path: String,
-    pub camera_layer: i32,
+    pub camera_layer: isize,
     pub title_font_size: f32,
+    pub title: String,
     pub data_font_size: f32,
+    pub data_vec: Vec<String>,
+}
+
+impl EasyVecUi {
+    pub fn inject_vec(&mut self, vec: Vec<String>) {
+        self.data_vec = vec;
+    }
 }
 
 #[derive(Resource)]
