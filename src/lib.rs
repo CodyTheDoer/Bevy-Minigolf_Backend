@@ -31,26 +31,8 @@ pub struct ConnectedPlayers {
     pub players: Arc<Mutex<HashMap<Uuid, PlayerHeartBeatStatus>>>,
 }
 
-#[derive(Component)]
-pub struct ConnectedPlayersNode;
-
 #[derive(Resource)]
 pub struct DatabasePool(pub MySqlPool);
-
-
-#[derive(Resource)]
-pub struct Fonts {
-    pub fonts: Vec<TextStyle>,
-}
-
-impl Fonts {
-    pub fn new() -> Self {
-        let fonts: Vec<TextStyle> = Vec::new();
-        Fonts {
-            fonts,
-        }
-    }
-}
 
 #[derive(Resource)]
 pub struct HeartBeatMonitorTimer(pub Timer);
@@ -133,9 +115,6 @@ pub struct PlayerInfoStorage {
     pub players: Arc<Mutex<Vec<Arc<Mutex<PlayerInfo>>>>>,
 }
 
-#[derive(Component)]
-pub struct PlayerStatusText;
-
 #[derive(Debug, Resource)]
 pub struct RunTrigger{
     trigger_idx: i32,
@@ -155,9 +134,3 @@ pub struct SyncTriggerIndexEvent {
     pub player_id: Uuid,
     pub trigger_idx: usize,
 }
-
-#[derive(Component)]
-pub struct TitleText;
-
-#[derive(Resource)]
-pub struct UiUpdateTimer(pub Timer);
