@@ -1,20 +1,14 @@
 use bevy::prelude::*;
 
 use std::time::Duration;
-
-// use std::sync::Arc;
-// use std::sync::Mutex;
-
-// setup_ui,
-// ui_update_system,
-
 pub struct BevyEasyVecUiPlugin {
     font_path: String,
     camera_layer: isize,
     title_font_size: f32,
     title: String,
     data_font_size: f32,
-    pub data_vec: Vec<String>,
+    data_vec_left: Vec<String>,
+    data_vec_right: Vec<String>,
 }
 
 impl BevyEasyVecUiPlugin {
@@ -23,9 +17,10 @@ impl BevyEasyVecUiPlugin {
             font_path: String::from(font_path),
             camera_layer: -1,
             title_font_size: 42.0,
-            title: String::from("Default title:"),
+            title: String::from("Default Title: Not Set"),
             data_font_size: 12.0,
-            data_vec: Vec::new(),
+            data_vec_left: Vec::new(),
+            data_vec_right: Vec::new(),
         }
     }
 
@@ -56,7 +51,8 @@ impl BevyEasyVecUiPlugin {
             title_font_size: self.title_font_size,
             title: self.title,
             data_font_size: self.data_font_size,
-            data_vec: self.data_vec,
+            data_vec_left: self.data_vec_left,
+            data_vec_right: self.data_vec_right,
         }
     }
 }
@@ -70,7 +66,8 @@ impl Plugin for BevyEasyVecUiPlugin {
             title_font_size: self.title_font_size.clone(),
             title: self.title.clone(),
             data_font_size: self.data_font_size.clone(),
-            data_vec: self.data_vec.clone(),
+            data_vec_left: self.data_vec_left.clone(),
+            data_vec_right: self.data_vec_right.clone(),
         });
         app.insert_resource(EasyVecUiFonts::new());
         app.insert_resource(EasyVecUiUpdateTimer(Timer::new(Duration::from_millis(250), TimerMode::Repeating)));
@@ -151,7 +148,7 @@ pub fn setup_ui(
                 display: Display::Flex,
                 align_items: AlignItems::FlexStart,     // Align items from the top of the node
                 flex_direction: FlexDirection::Column,  // Stack items vertically
-                justify_content: JustifyContent::FlexStart, // Align from the start (top-left)
+                justify_content: JustifyContent::FlexStart, // Align top-left
                 position_type: PositionType::Absolute,
                 bottom: Val::Percent(0.0), // Position at the bottom of the screen
                 left: Val::Percent(0.0),   // Align it to the left of the screen
@@ -171,7 +168,37 @@ pub fn setup_ui(
                     },
                     ..default()
                 },
-                EasyVecUiNode, // Tag the node for easy updates later
+                EasyVecUiNodeLeft, // Tag the node for easy updates later
+            ));
+        });
+    
+    commands
+        .spawn(NodeBundle {
+            style: Style {
+                display: Display::Flex,
+                align_items: AlignItems::FlexStart,     // Align items from the top of the node
+                flex_direction: FlexDirection::Column,  // Stack items vertically
+                justify_content: JustifyContent::FlexEnd, // Align top-Right
+                position_type: PositionType::Absolute,
+                bottom: Val::Percent(0.0), // Position at the bottom of the screen
+                right: Val::Percent(0.0),   // Align it to the left of the screen
+                padding: UiRect::all(Val::Px(10.0)),
+                ..default()
+            },
+            ..default()
+        })
+        .with_children(|parent| {
+            // Tag this node so it can be dynamically updated
+            parent.spawn((
+                NodeBundle {
+                    style: Style {
+                        display: Display::Flex,
+                        flex_direction: FlexDirection::Column, // Stack items vertically
+                        ..default()
+                    },
+                    ..default()
+                },
+                EasyVecUiNodeRight, // Tag the node for easy updates later
             ));
         });
 }
@@ -180,42 +207,32 @@ pub fn ui_update_system(
     time: Res<Time>,
     mut timer: ResMut<EasyVecUiUpdateTimer>,
     commands: Commands,
-    asset_server: Res<AssetServer>,
-    fonts: ResMut<EasyVecUiFonts>,
-    query: Query<Entity, With<EasyVecUiNode>>,
+    fonts: Res<EasyVecUiFonts>,
+    query_left: Query<Entity, With<EasyVecUiNodeLeft>>,
+    query_right: Query<Entity, With<EasyVecUiNodeRight>>,
     user_supplied: Res<EasyVecUi>,
 ) {
     // Check if the timer has finished
     if timer.0.tick(time.delta()).finished() {
         // Call the function to update the connected players Ui
-        update_ui(&user_supplied.data_vec, query, commands, asset_server, fonts);
+        update_ui(user_supplied, query_left, query_right, commands, fonts);
     }
 }
 
 pub fn update_ui(
-    connected_players: &Vec<String>,
-    query: Query<Entity, With<EasyVecUiNode>>,
+    user_supplied: Res<EasyVecUi>,
+    query_left: Query<Entity, With<EasyVecUiNodeLeft>>,
+    query_right: Query<Entity, With<EasyVecUiNodeRight>>,
     mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    mut fonts: ResMut<EasyVecUiFonts>,
-) {
-    // Load and setup fonts
-    let font = asset_server.load("fonts/MatrixtypeDisplay-KVELZ.ttf");
-    let matrix_display_small = TextStyle {
-        font: font.clone(),
-        font_size: 14.0,
-        ..default()
-    };
-    fonts.fonts.push(matrix_display_small.clone());
-
-    
-    if let Ok(connected_players_node) = query.get_single() {
-        commands.entity(connected_players_node).despawn_descendants();
+    fonts: Res<EasyVecUiFonts>,
+) {    
+    if let Ok(data_node_container_left) = query_left.get_single() {
+        commands.entity(data_node_container_left).despawn_descendants();
 
         // Iterate over each player and create a row for each one
-        for status in connected_players.iter() {
+        for status in user_supplied.data_vec_left.iter() {
             // Spawn a new node for each player, representing a row
-            commands.entity(connected_players_node).with_children(|parent| {
+            commands.entity(data_node_container_left).with_children(|parent| {
                 parent
                     .spawn(NodeBundle {
                         background_color: BackgroundColor(Color::srgba(0.1, 0.1, 0.1, 0.25)), // Semi-transparent dark background
@@ -234,7 +251,47 @@ pub fn update_ui(
                             text: Text {
                                 sections: vec![TextSection::new(
                                     format!("{}", status),
-                                    matrix_display_small.clone(),
+                                    fonts.fonts[1].clone(),
+                                )],
+                                ..default()
+                            },
+                            style: Style {
+                                margin: UiRect::right(Val::Px(10.0)), // Spacing between player ID and other fields
+                                ..default()
+                            },
+                            ..default()
+                        });
+                    });
+            });
+        }
+    }
+    
+    if let Ok(data_node_container_right) = query_right.get_single() {
+        commands.entity(data_node_container_right).despawn_descendants();
+
+        // Iterate over each player and create a row for each one
+        for status in user_supplied.data_vec_right.iter() {
+            // Spawn a new node for each player, representing a row
+            commands.entity(data_node_container_right).with_children(|parent| {
+                parent
+                    .spawn(NodeBundle {
+                        background_color: BackgroundColor(Color::srgba(0.1, 0.1, 0.1, 0.25)), // Semi-transparent dark background
+                        style: Style {
+                            display: Display::Flex,
+                            flex_direction: FlexDirection::Row, // Arrange items horizontally within the row
+                            align_items: AlignItems::Center,    // Center items vertically within the row
+                            margin: UiRect::all(Val::Px(5.0)),  // Add some spacing between rows
+                            ..default()
+                        },
+                        ..default()
+                    })
+                    .with_children(|row| {
+                        // Player ID text
+                        row.spawn(TextBundle {
+                            text: Text {
+                                sections: vec![TextSection::new(
+                                    format!("{}", status),
+                                    fonts.fonts[1].clone(),
                                 )],
                                 ..default()
                             },
@@ -254,7 +311,10 @@ pub fn update_ui(
 pub struct EasyVecUiCamera;
 
 #[derive(Component)]
-pub struct EasyVecUiNode;
+pub struct EasyVecUiNodeLeft;
+
+#[derive(Component)]
+pub struct EasyVecUiNodeRight;
 
 #[derive(Clone, Resource)]
 pub struct EasyVecUi {
@@ -263,12 +323,17 @@ pub struct EasyVecUi {
     pub title_font_size: f32,
     pub title: String,
     pub data_font_size: f32,
-    pub data_vec: Vec<String>,
+    pub data_vec_left: Vec<String>,
+    pub data_vec_right: Vec<String>,
 }
 
 impl EasyVecUi {
-    pub fn inject_vec(&mut self, vec: Vec<String>) {
-        self.data_vec = vec;
+    pub fn inject_vec_left(&mut self, vec: Vec<String>) {
+        self.data_vec_left = vec;
+    }
+
+    pub fn inject_vec_right(&mut self, vec: Vec<String>) {
+        self.data_vec_right = vec;
     }
 }
 
