@@ -42,9 +42,18 @@ pub fn easy_vec_ui(
     connected_players: Res<ConnectedPlayers>,
     run_trigger: Res<RunTrigger>,
 ) {
-    let mut left_data_vec: Vec<String> = Vec::new();
     
-    // Lock the connected players to read player data
+    let right_data_vec = vec![
+            String::from("Right"),
+            String::from("Vec"),
+            String::from("Ui"),
+            String::from("DATA"),
+            String::from("Points"),
+        ];
+    easy_vec_ui_resource.inject_vec_right(right_data_vec);
+
+    let mut left_data_vec: Vec<String> = Vec::new();
+        // Lock the connected players to read player data
     let players_guard = connected_players.players.lock().unwrap();
     for (uuid, player_status) in players_guard.iter() { // Iterate over each player and create a row for each one
         left_data_vec.push(String::from(format!("Player ID: [{}] Last heartbeat: [{:?}]", uuid, player_status.last_heartbeat)));
@@ -53,13 +62,5 @@ pub fn easy_vec_ui(
     left_data_vec.push(String::from(format!("( Shift + E ) <--- Client Run Trigger Index [{}] ---> ( Shift + D )", run_trigger.get_trigger_idx())));
     left_data_vec.push(String::from(format!("( Shift + F ) All Clients Run Trigger: [{}]", run_trigger.get_triggers_ref()[run_trigger.get_trigger_idx()])));
 
-    let right_data_vec = vec![
-            String::from("Right"),
-            String::from("Vec"),
-            String::from("Ui"),
-            String::from("DATA"),
-            String::from("Points"),
-        ];
     easy_vec_ui_resource.inject_vec_left(left_data_vec);
-    easy_vec_ui_resource.inject_vec_right(right_data_vec);
 }

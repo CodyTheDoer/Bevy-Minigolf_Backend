@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 bevy = "0.14.2"
-bevy_easy_vec_ui = { path = "D:/bevy/donut/bevy_easy_vec_ui" }
+bevy_easy_vec_ui = "0.1.0"
 bevy_matchbox = { version = "0.10", features = ["signaling"] }
 bevy-tokio-tasks = "0.14.0"
 dotenv = "0.15.0"
